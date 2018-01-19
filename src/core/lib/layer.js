@@ -692,10 +692,6 @@ ${flags.viewportChanged ? 'viewport' : ''}\
     return redraw;
   }
 
-<<<<<<< HEAD
-=======
-
->>>>>>> Refactor layer property handling (#1329)
   // Called by layer manager to transfer state from an old layer
   _transferState(oldLayer) {
     const {state, internalState, props} = oldLayer;
