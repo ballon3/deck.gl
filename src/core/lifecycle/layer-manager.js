@@ -19,13 +19,17 @@
 // THE SOFTWARE.
 
 import assert from 'assert';
-import {Framebuffer, ShaderCache} from 'luma.gl';
+import {LIFECYCLE} from './constants';
+import LifecycleManager from './lifecycle-manager';
 import seer from 'seer';
+
+import {Framebuffer, ShaderCache} from 'luma.gl';
 import Layer from './layer';
 import {drawLayers} from './draw-layers';
 import {pickObject, pickVisibleObjects} from './pick-layers';
-import {LIFECYCLE} from '../lifecycle/constants';
 import Viewport from '../viewports/viewport';
+// TODO - remove, just for dummy initialization
+import WebMercatorViewport from '../viewports/web-mercator-viewport';
 import log from '../utils/log';
 import {flatten} from '../utils/flatten';
 
@@ -37,13 +41,10 @@ import {
   updateLayerInSeer
 } from './seer-integration';
 
-// TODO - remove, just for dummy initialization
-import WebMercatorViewport from '../viewports/web-mercator-viewport';
-
 const LOG_PRIORITY_LIFECYCLE = 2;
 const LOG_PRIORITY_LIFECYCLE_MINOR = 4;
 
-const initialContext = {
+const INITIAL_CONTEXT = {
   uniforms: {},
   viewports: [],
   viewport: null,
@@ -59,9 +60,18 @@ const initialContext = {
 
 const layerName = layer => (layer instanceof Layer ? `${layer}` : !layer ? 'null' : 'invalid');
 
-export default class LayerManager {
+export default class LayerManager extends LifecycleManager {
   // eslint-disable-next-line
   constructor(gl, {eventManager} = {}) {
+    super();
+
+    // Setup context
+    Object.assign(this.context, INITIAL_CONTEXT, {
+      gl,
+      // Enabling luma.gl Program caching using private API (_cachePrograms)
+      shaderCache: new ShaderCache({gl, _cachePrograms: true})
+    });
+
     // Currently deck.gl expects the DeckGL.layers array to be different
     // whenever React rerenders. If the same layers array is used, the
     // LayerManager's diffing algorithm will generate a fatal error and
@@ -75,20 +85,12 @@ export default class LayerManager {
     this.prevLayers = [];
     this.layers = [];
 
-    this.oldContext = {};
-    this.context = Object.assign({}, initialContext, {
-      gl,
-      // Enabling luma.gl Program caching using private API (_cachePrograms)
-      shaderCache: new ShaderCache({gl, _cachePrograms: true})
-    });
-
     // List of view descriptors, gets re-evaluated when width/height changes
     this.width = 100;
     this.height = 100;
     this.viewDescriptors = [];
     this.viewDescriptorsChanged = true;
     this.viewports = []; // Generated viewports
-    this._needsRedraw = 'Initial render';
 
     // Event handling
     this._pickingRadius = 0;
@@ -101,12 +103,6 @@ export default class LayerManager {
     this._onPointerLeave = this._onPointerLeave.bind(this);
     this._pickAndCallback = this._pickAndCallback.bind(this);
 
-    // Seer integration
-    this._initSeer = this._initSeer.bind(this);
-    this._editSeer = this._editSeer.bind(this);
-    seerInitListener(this._initSeer);
-    layerEditListener(this._editSeer);
-
     Object.seal(this);
 
     if (eventManager) {
@@ -117,6 +113,13 @@ export default class LayerManager {
     this.setViewports([
       new WebMercatorViewport({width: 1, height: 1, latitude: 0, longitude: 0, zoom: 1})
     ]);
+
+    this._needsRedraw = 'Initial render';
+    // Seer integration
+    this._initSeer = this._initSeer.bind(this);
+    this._editSeer = this._editSeer.bind(this);
+    seerInitListener(this._initSeer);
+    layerEditListener(this._editSeer);
   }
 
   /**
@@ -164,6 +167,16 @@ export default class LayerManager {
    * @param {Boolean} useDevicePixels
    */
   setParameters(parameters) {
+    // TODO - For now we set layers before viewports to preservenchangeFlags
+    super.setParameters(parameters);
+
+    if ('layerFilter' in parameters) {
+      this.context.layerFilter = parameters.layerFilter;
+      if (this.context.layerFilter !== parameters.layerFilter) {
+        this.setNeedsRedraw('layerFilter changed');
+      }
+    }
+
     if ('eventManager' in parameters) {
       this._initEventHandling(parameters.eventManager);
     }
@@ -176,20 +189,8 @@ export default class LayerManager {
       this._setEventHandlingParameters(parameters);
     }
 
-    // TODO - For now we set layers before viewports to preservenchangeFlags
-    if ('layers' in parameters) {
-      this.setLayers(parameters.layers);
-    }
-
     if ('viewports' in parameters) {
       this.setViewports(parameters.viewports);
-    }
-
-    if ('layerFilter' in parameters) {
-      this.context.layerFilter = parameters.layerFilter;
-      if (this.context.layerFilter !== parameters.layerFilter) {
-        this.setNeedsRedraw('layerFilter changed');
-      }
     }
 
     if ('drawPickingColors' in parameters) {

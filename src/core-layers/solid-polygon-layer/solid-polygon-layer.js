@@ -21,7 +21,7 @@
 import {COORDINATE_SYSTEM, Layer, experimental} from '../../core';
 const {enable64bitSupport, get} = experimental;
 import {GL, Model, Geometry} from 'luma.gl';
-import {compareProps} from '../../core/lib/props';
+import {compareProps} from '../../core/lifecycle/props';
 
 // Polygon geometry generation is managed by the polygon tesselator
 import {PolygonTesselator} from './polygon-tesselator';
@@ -72,6 +72,7 @@ export default class SolidPolygonLayer extends Layer {
       numInstances: 0,
       IndexType: gl.getExtension('OES_element_index_uint') ? Uint32Array : Uint16Array
     });
+
     const attributeManager = this.getAttributeManager();
     const noAlloc = true;
     /* eslint-disable max-len */

@@ -42,11 +42,11 @@ const defaultProps = {
   getElevationValue: points => points.length,
   elevationLowerPercentile: 0,
   elevationUpperPercentile: 100,
-  elevationScale: 1,
+  elevationScale: {type: 'number', min: 0, value: 1},
   onSetElevationDomain: nop,
 
   radius: 1000,
-  coverage: 1,
+  coverage: {type: 'number', min: 0, max: 1, value: 1},
   extruded: false,
   hexagonAggregator: pointToHexbin,
   getPosition: x => x.position,
@@ -209,10 +209,9 @@ export default class HexagonLayer extends CompositeLayer {
   }
 
   getHexagons() {
-    const {data, hexagonAggregator} = this.props;
+    const {hexagonAggregator} = this.props;
     const {viewport} = this.context;
-    const props = Object.assign({}, this.props, {data});
-    const {hexagons, hexagonVertices} = hexagonAggregator(props, viewport);
+    const {hexagons, hexagonVertices} = hexagonAggregator(this.props, viewport);
     this.setState({hexagons, hexagonVertices});
     this.getSortedBins();
   }
