@@ -19,14 +19,15 @@
 // THE SOFTWARE.
 
 /* global window */
-import {COORDINATE_SYSTEM, LIFECYCLE} from './constants';
+import {COORDINATE_SYSTEM} from './constants';
 import AttributeManager from './attribute-manager';
 import Stats from './stats';
-import {count} from '../utils/count';
-import log from '../utils/log';
+import {removeLayerInSeer} from './seer-integration';
+import {LIFECYCLE} from '../lifecycle/constants';
 import {createProps} from '../lifecycle/create-props';
 import {diffProps} from '../lifecycle/props';
-import {removeLayerInSeer} from './seer-integration';
+import {count} from '../utils/count';
+import log from '../utils/log';
 import {GL, withParameters} from 'luma.gl';
 import assert from 'assert';
 
@@ -42,7 +43,7 @@ const defaultProps = {
 
   visible: true,
   pickable: false,
-  opacity: 0.8,
+  opacity: {type: 'number', min: 0, max: 1, value: 0.8},
 
   onHover: noop,
   onClick: noop,
