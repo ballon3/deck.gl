@@ -18,9 +18,4 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-import './viewports';
-import './views';
-import './lib';
-import './utils';
-import './shaderlib';
-import './experimental';
+import './view.spec';
