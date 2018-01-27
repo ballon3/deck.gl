@@ -1,5 +1,25 @@
 import assert from 'assert';
 
+const TYPE_DEFINITIONS = {
+  boolean: {
+    validate(value, propType) {
+      return true;
+    }
+  },
+  number: {
+    validateType(value, propType) {
+      return 'value' in propType &&
+        (!('max' in propType) || Number.isFinite(propType.max)) &&
+        (!('min' in propType) || Number.isFinite(propType.min));
+    },
+    validate(value, propType) {
+      return Number.isFinite(value) &&
+        (!('max' in propType) || value <= propType.max) &&
+        (!('min' in propType) || value >= propType.min);
+    }
+  }
+}
+
 export function parsePropTypes(propDefs) {
   const propTypes = {};
   const defaultProps = {};
@@ -57,24 +77,11 @@ function normalizePropDefinition(name, propDef) {
 }
 
 function parsePropDefinition(propDef) {
-  switch (propDef.type) {
-    case 'number':
-      assert(
-        'value' in propDef &&
-          (!('max' in propDef) || Number.isFinite(propDef.max)) &&
-          (!('min' in propDef) || Number.isFinite(propDef.min))
-      );
-      // TODO check that value is in [min, max]
-      break;
-
-    case 'boolean':
-    case 'array':
-    case 'data':
-    default:
-      break;
-
-    case undefined:
-      assert(false);
+  const {type} = propDef;
+  const typeDefinition = TYPE_DEFINITIONS[type];
+  const {typeValidator} = typeDefinition
+  if (typeValidator) {
+    assert(typeValidator(propDef), 'Illegal prop type');
   }
 
   return propDef;
