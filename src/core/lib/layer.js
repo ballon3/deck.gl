@@ -25,7 +25,7 @@ import {LIFECYCLE} from '../lifecycle/constants';
 import AttributeManager from './attribute-manager';
 import {count} from '../utils/count';
 import log from '../utils/log';
-import {createProps, EMPTY_ARRAY} from '../lifecycle/create-props';
+import {createProps} from '../lifecycle/create-props';
 import {diffProps} from '../lifecycle/props';
 import {removeLayerInSeer} from './seer-integration';
 import {GL, withParameters} from 'luma.gl';
@@ -35,12 +35,14 @@ import LayerState from './layer-state';
 
 const LOG_PRIORITY_UPDATE = 1;
 const EMPTY_PROPS = Object.freeze({});
+const EMPTY_ARRAY = Object.freeze([]);
 const noop = () => {};
 
 const defaultProps = {
   // data: Special handling for null, see below
   data: {type: 'data', value: EMPTY_ARRAY, async: true},
   dataComparator: null,
+  dataTransform: data => data,
   fetch: url => fetch(url).then(response => response.json()),
   updateTriggers: {}, // Update triggers: a core change detection mechanism in deck.gl
   numInstances: undefined,
@@ -239,14 +241,6 @@ export default class Layer {
     return index;
   }
 
-  setAsyncProp(props, propName, value) {
-    this.internalState.setAsyncProp(props, propName, value);
-  }
-
-  getAsyncProp(props, propName) {
-    return this.internalState ? this.internalState.getAsyncProp(props, propName) : EMPTY_ARRAY;
-  }
-
   // //////////////////////////////////////////////////
   // LIFECYCLE METHODS, overridden by the layer subclasses
 
@@ -300,6 +294,11 @@ export default class Layer {
   // //////////////////////////////////////////////////
 
   // INTERNAL METHODS
+
+  // TODO - avoid forwarding?
+  getAsyncProp(propName, props) {
+    return this.internalState ? this.internalState.getAsyncProp(propName, props) : EMPTY_ARRAY;
+  }
 
   // Deduces numer of instances. Intention is to support:
   // - Explicit setting of numInstances
@@ -398,29 +397,8 @@ export default class Layer {
   _initialize() {
     assert(arguments.length === 0);
     assert(this.context.gl);
-    assert(!this.internalState && !this.state);
 
-    const attributeManager = new AttributeManager(this.context.gl, {
-      id: this.props.id
-    });
-
-    // All instanced layers get instancePickingColors attribute by default
-    // Their shaders can use it to render a picking scene
-    // TODO - this slightly slows down non instanced layers
-    attributeManager.addInstanced({
-      instancePickingColors: {
-        type: GL.UNSIGNED_BYTE,
-        size: 3,
-        update: this.calculateInstancePickingColors
-      }
-    });
-
-    this.internalState = new LayerState({
-      attributeManager
-    });
-    this.state = {};
-    // TODO deprecated, for backwards compatibility with older layers
-    this.state.attributeManager = this.getAttributeManager();
+    this._initState();
 
     // Call subclass lifecycle methods
     this.initializeState(this.context);
@@ -437,7 +415,7 @@ export default class Layer {
       model.id = this.props.id;
       model.program.id = `${this.props.id}-program`;
       model.geometry.id = `${this.props.id}-geometry`;
-      model.setAttributes(attributeManager.getAttributes());
+      model.setAttributes(this.getAttributeManager().getAttributes());
     }
 
     // Last but not least, update any sublayers
@@ -584,6 +562,10 @@ export default class Layer {
     changeFlags.propsOrDataChanged = changeFlags.propsOrDataChanged || propsOrDataChanged;
     changeFlags.somethingChanged =
       changeFlags.somethingChanged || propsOrDataChanged || flags.viewportChanged;
+
+    if (propsOrDataChanged) {
+      this.context.layerManager.scheduleLayerUpdate(this);
+    }
   }
   /* eslint-enable complexity */
 
@@ -707,6 +689,35 @@ ${flags.viewportChanged ? 'viewport' : ''}\
     return redraw;
   }
 
+  _initState() {
+    assert(!this.internalState && !this.state);
+
+    const attributeManager = new AttributeManager(this.context.gl, {
+      id: this.props.id
+    });
+
+    // All instanced layers get instancePickingColors attribute by default
+    // Their shaders can use it to render a picking scene
+    // TODO - this slightly slows down non instanced layers
+    attributeManager.addInstanced({
+      instancePickingColors: {
+        type: GL.UNSIGNED_BYTE,
+        size: 3,
+        update: this.calculateInstancePickingColors
+      }
+    });
+
+    this.internalState = new LayerState({
+      attributeManager
+    });
+    this.state = {};
+    // TODO deprecated, for backwards compatibility with older layers
+    this.state.attributeManager = this.getAttributeManager();
+
+    // Ensure any async props are updated
+    this.internalState.updateAsyncProps(this.props);
+  }
+
   // Called by layer manager to transfer state from an old layer
   _transferState(oldLayer) {
     const {state, internalState, props} = oldLayer;
@@ -721,6 +732,9 @@ ${flags.viewportChanged ? 'viewport' : ''}\
 
     // Keep a temporary ref to the old props, for prop comparison
     this.oldProps = props;
+
+    // Ensure any async props are updated
+    this.internalState.updateAsyncProps(this.props);
 
     // Update model layer reference
     for (const model of this.getModels()) {

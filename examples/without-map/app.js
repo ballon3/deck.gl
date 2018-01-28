@@ -1,4 +1,4 @@
-/* global window,document,fetch */
+/* global window,document */
 import React, {Component} from 'react';
 import {render} from 'react-dom';
 import DeckGL, {GeoJsonLayer, experimental} from 'deck.gl';
@@ -22,13 +22,12 @@ class Root extends Component {
         pitch: 60
       },
       width: 500,
-      height: 500,
-      data: null
+      height: 500
     };
 
-    fetch(GEOJSON)
-      .then(resp => resp.json())
-      .then(data => this.setState({data}));
+    // fetch(GEOJSON)
+    //   .then(resp => resp.json())
+    //   .then(data => this.setState({data}));
   }
 
   componentDidMount() {
@@ -44,7 +43,7 @@ class Root extends Component {
   }
 
   render() {
-    const {viewport, width, height, data} = this.state;
+    const {viewport, width, height} = this.state;
 
     return (
       <MapController
@@ -60,7 +59,7 @@ class Root extends Component {
           debug
           layers={[
             new GeoJsonLayer({
-              data,
+              data: GEOJSON,
               stroked: true,
               filled: true,
               lineWidthMinPixels: 2,

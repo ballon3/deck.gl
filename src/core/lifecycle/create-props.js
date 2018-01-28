@@ -2,8 +2,6 @@ import {applyPropOverrides} from '../lib/seer-integration';
 import log from '../utils/log';
 import {parsePropTypes} from './prop-types';
 
-export const EMPTY_ARRAY = Object.freeze([]);
-
 // const ASYNC_PROPS = {
 //   // Accept null as data - otherwise apps and layers need to add ugly checks
 //   // Use constant fallback so that data change is not triggered
@@ -20,10 +18,12 @@ export function createProps() {
   // Create a new prop object with  default props object in prototype chain
   const newProps = Object.create(defaultProps, {
     _layer: {
+      // Back pointer to the owning layer
       enumerable: false,
       value: layer
     },
-    _asyncProps: {
+    _shadowValues: {
+      // Actual, supplied values for async props, cannot be shown directly to layers
       enumerable: false,
       value: {}
     }
@@ -33,7 +33,6 @@ export function createProps() {
   for (let i = 0; i < arguments.length; ++i) {
     Object.assign(newProps, arguments[i]);
   }
-  newProps.data = newProps.data || EMPTY_ARRAY;
 
   // SEER: Apply any overrides from the seer debug extension if it is active
   applyPropOverrides(newProps);
@@ -53,7 +52,7 @@ export function createProps() {
 //     } else {
 //       value = asyncProps[propName];
 //     }
-//     newProps._asyncProps[propName] = value;
+//     newProps._shadowValues[propName] = value;
 //   }
 //   return props;
 // }
@@ -138,15 +137,22 @@ function buildDefaultProps(props, parentProps, propTypes, layerClass) {
     }
   });
 
-  // if ('data' in propTypes) {
-  //   delete props.data;
-  //   Object.assign(descriptors, {
-  //     data: {
-  //       configurable: false,
-  //       get() { return this._layer.getAsyncProp(this, 'data'); }
-  //     }
-  //   });
-  // }
+  if ('data' in propTypes) {
+    delete props.data;
+    Object.assign(descriptors, {
+      data: {
+        configurable: false,
+        // Save the provided value for async props in a special map
+        set(value) {
+          this._shadowValues.data = value;
+        },
+        // Only the layer's state knows the true value of async prop
+        get() {
+          return this._layer && this._layer.getAsyncProp('data', this);
+        }
+      }
+    });
+  }
 
   Object.defineProperties(defaultProps, descriptors);
 

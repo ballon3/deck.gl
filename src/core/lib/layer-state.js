@@ -1,6 +1,8 @@
 import Stats from './stats';
 import assert from 'assert';
 
+const EMPTY_ARRAY = Object.freeze([]);
+
 export default class LayerState {
   constructor({attributeManager}) {
     assert(attributeManager);
@@ -10,53 +12,57 @@ export default class LayerState {
     this.subLayers = null; // reference to sublayers rendered in a previous cycle
     this.stats = new Stats({id: 'draw'});
     this.layer = null;
-    // this.initializePropOverrides();
+    this.asyncValues = {};
     // this.animatedProps = null, // Computing animated props requires layer manager state
   }
 
-  initializePropOverrides() {
-    this.setAsyncProp({propName: 'data', value: null});
+  getAsyncProp(propName, props) {
+    return propName in this.asyncValues
+      ? this.asyncValues[propName].value
+      : props._shadowValues[propName];
   }
 
-  getAsyncProp(propName) {
-    return this.asyncProps[propName].value;
+  updateAsyncProps(props) {
+    this.setAsyncProp('data', props._shadowValues.data, props);
   }
 
-  setAsyncProp({propName, value, layer, fetch, dataTransform}) {
-    assert(propName && layer);
-    this.asyncProps[propName] = this.asyncProps[propName] || {
-      lastValue: null, // Original value is stored here
-      loadValue: null, // Auto loaded data is stored here
-      loadPromise: null, // Auto load promise
-      loadCount: 0
-    };
-
-    const asyncProp = this.asyncProps[propName];
-    if (value === asyncProp.lastValue) {
-      return false;
-    }
-    asyncProp.lastValue = value;
-
+  setAsyncProp(propName, value, props) {
     // Intercept strings and promises
     const type = value instanceof Promise ? 'Promise' : typeof value;
 
     switch (type) {
       case 'string':
+        const {fetch, dataTransform} = props;
+
+        const asyncProp = this._getAsyncProp(propName, props._shadowValues[propName]);
+        if (value === asyncProp.lastValue) {
+          return false;
+        }
+        asyncProp.lastValue = value;
+
         // interpret value string as url and start a new load
         const url = value;
         this._loadAsyncProp({url, asyncProp, fetch, dataTransform});
         break;
 
-      case 'Promise':
-        // TODO - implement support for promise arguments
-        break;
-
       default:
-        // eslint-disable-line
-        // An actual value was set
-        asyncProp.loadValue = value;
+        // Remove entry from map, disabled shadowing
+        delete this.asyncValues[propName];
     }
     return false;
+  }
+
+  _getAsyncProp(propName, value) {
+    // assert(propName && this.layer);
+    this.asyncValues[propName] = this.asyncValues[propName] || {
+      lastValue: null, // Original value is stored here
+      loadValue: null, // Auto loaded data is stored here
+      loadPromise: null, // Auto load promise
+      loadCount: 0,
+      value: EMPTY_ARRAY
+    };
+
+    return this.asyncValues[propName];
   }
 
   _loadAsyncProp({url, asyncProp, fetch, dataTransform}) {
