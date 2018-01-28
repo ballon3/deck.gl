@@ -15,7 +15,7 @@ export function createProps() {
   const layer = this; // eslint-disable-line
 
   // Get default prop object (a prototype chain for now)
-  const {defaultProps} = getDefaultProps(layer.constructor);
+  const {defaultProps} = getPropDefs(layer.constructor);
 
   // Create a new prop object with  default props object in prototype chain
   const newProps = Object.create(defaultProps, {

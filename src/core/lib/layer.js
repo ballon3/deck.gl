@@ -343,6 +343,9 @@ export default class Layer {
   // Calls attribute manager to update any WebGL attributes
   updateAttributes(props) {
     const attributeManager = this.getAttributeManager();
+    if (!attributeManager) {
+      return;
+    }
 
     // Figure out data length
     const numInstances = this.getNumInstances(props);

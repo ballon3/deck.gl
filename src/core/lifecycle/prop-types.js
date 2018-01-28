@@ -1,6 +1,30 @@
 import assert from 'assert';
 
-export function parsePropTypes(propDefs, layerClass) {
+const TYPE_DEFINITIONS = {
+  boolean: {
+    validate(value, propType) {
+      return true;
+    }
+  },
+  number: {
+    validateType(value, propType) {
+      return (
+        'value' in propType &&
+        (!('max' in propType) || Number.isFinite(propType.max)) &&
+        (!('min' in propType) || Number.isFinite(propType.min))
+      );
+    },
+    validate(value, propType) {
+      return (
+        Number.isFinite(value) &&
+        (!('max' in propType) || value <= propType.max) &&
+        (!('min' in propType) || value >= propType.min)
+      );
+    }
+  }
+};
+
+export function parsePropTypes(propDefs) {
   const propTypes = {};
   const defaultProps = {};
   for (const [propName, propDef] of Object.entries(propDefs)) {
@@ -14,37 +38,35 @@ export function parsePropTypes(propDefs, layerClass) {
 // Parses one property definition entry. Either contains:
 // * a valid prop type object ({type, ...})
 // * or just a default value, in which case type and name inference is used
-function parsePropType(propName, propDef) {
+function parsePropType(name, propDef) {
   switch (getTypeOf(propDef)) {
     case 'object':
-      propDef = normalizePropDefinition(propName, propDef);
+      propDef = normalizePropDefinition(name, propDef);
       return parsePropDefinition(propDef);
 
     case 'array':
-      return guessArrayType(propName, propDef);
+      return guessArrayType(name, propDef);
 
     case 'boolean':
-      return {type: 'boolean', max: true, min: false, value: propDef};
+      return {name, type: 'boolean', value: propDef};
 
     case 'number':
-      return guessNumberType(propName, propDef);
+      return guessNumberType(name, propDef);
 
     case 'function':
-      return {type: 'function', value: propDef};
-    // return guessFunctionType(propName, propDef);
+      return {name, type: 'function', value: propDef};
+    // return guessFunctionType(name, propDef);
 
     default:
-      return {type: 'unknown', value: propDef};
+      return {name, type: 'unknown', value: propDef};
   }
 }
 
-function guessArrayType(propName, array) {
-  if (/color/i.test(propName)) {
-    if (array.length === 3 || array.length === 4) {
-      return {type: 'color', value: array};
-    }
+function guessArrayType(name, array) {
+  if (/color/i.test(name) && (array.length === 3 || array.length === 4)) {
+    return {name, type: 'color', value: array};
   }
-  return {type: 'array', value: array};
+  return {name, type: 'array', value: array};
 }
 
 function normalizePropDefinition(name, propDef) {
@@ -59,36 +81,23 @@ function normalizePropDefinition(name, propDef) {
 }
 
 function parsePropDefinition(propDef) {
-  switch (propDef.type) {
-    case 'number':
-      assert(
-        'value' in propDef &&
-          (!('max' in propDef) || Number.isFinite(propDef.max)) &&
-          (!('min' in propDef) || Number.isFinite(propDef.min))
-      );
-      // TODO check that value is in [min, max]
-      break;
-
-    case 'boolean':
-    case 'array':
-    case 'data':
-    default:
-      break;
-
-    case undefined:
-      assert(false);
+  const {type} = propDef;
+  const typeDefinition = TYPE_DEFINITIONS[type] || {};
+  const {typeValidator} = typeDefinition;
+  if (typeValidator) {
+    assert(typeValidator(propDef), 'Illegal prop type');
   }
 
   return propDef;
 }
 
-function guessNumberType(propName, value) {
+function guessNumberType(name, value) {
   const isKnownProp =
-    /radius|scale|width|height|pixel|size|miter/i.test(propName) &&
-    /^((?!scale).)*$/.test(propName);
+    /radius|scale|width|height|pixel|size|miter/i.test(name) && /^((?!scale).)*$/.test(name);
   const max = isKnownProp ? 100 : 1;
   const min = 0;
   return {
+    name,
     type: 'number',
     max: Math.max(value, max),
     min: Math.min(value, min),
